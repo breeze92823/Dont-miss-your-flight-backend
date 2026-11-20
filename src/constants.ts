@@ -16,8 +16,8 @@ export const TOKEN_MAX_LEN = 4096;
 // built at y 300, the arrival city far out on x).
 export const AVATAR_MAX_LEN = 3000;
 export const POSE_BOUNDS = { xz: 5000, yDown: 200, yUp: 1000, speed: 60 };
-// Where a player is: the shared airport, the flight cabin or the arrival city (the last two are
-// per destination, clients only draw players on the same flight there).
+// Where a player is: the shared airport, the flight cabin (shared by every flight in the air) or the
+// arrival city (per destination, clients only draw players who landed in the same city).
 export const ZONES = ["airport", "cabin", "city"] as const;
 // The shared lines a player can stand in (client queue.js / security.js / boarding.js).
 export const LINES = ["", "checkin", "security", "boarding"] as const;
