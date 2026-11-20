@@ -1,7 +1,8 @@
 // Keep in step with the client's src/config.js by hand (Don't Miss Your Flight).
-// Players per room (WorldRoom's maxClients; the deploy workflow sends it as Bloxity's roomSize,
-// which must stay 2-100 for party play). Every player in a room is a passenger the others see.
-export const ROOM_MAX_CLIENTS = 40;
+// Players per room (WorldRoom's maxClients). The deploy sends no room size: Bloxity's seatCap
+// defaults to 50, so the room holds the same 50 (2-100 for party play). Every player in a room is a
+// passenger the others see.
+export const ROOM_MAX_CLIENTS = 50;
 
 // Longest accepted strings.
 export const NAME_MAX = 64;
