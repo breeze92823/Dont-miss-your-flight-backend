@@ -32,6 +32,13 @@ export const MAX_PAYLOAD_BYTES = 64 * 1024;
 // How long a dropped connection (WiFi blip, backgrounded tab) may reconnect with the same session.
 export const RECONNECT_SECONDS = 20;
 
+// A player whose game has stopped (hidden / minimized tab, ad break, frozen, or a dropped connection
+// waiting to reconnect) is marked `away`: the others take them out of their lines and held spots so
+// nobody is stuck behind them. The client sends `alive` from its game loop every ~1 s; no beat for
+// AWAY_AFTER_MS (checked every AWAY_CHECK_MS) = away.
+export const AWAY_AFTER_MS = 5000;
+export const AWAY_CHECK_MS = 1000;
+
 // Saved progress bounds (client src/store.js snapshot()): coins, owned suitcases / passes / job
 // hats, visited destination codes, the booked flight, flights taken and timed rewards
 // { id: epoch ms it ends }. A timed reward may end at most TIMED_MAX_MS from now (the longest the
