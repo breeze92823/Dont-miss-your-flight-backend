@@ -190,12 +190,23 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   // A deliberate `room.leave()` closes with CONSENTED -- drop the player at once. Anything
   // else (WiFi blip, backgrounded tab) gets RECONNECT_SECONDS to reconnect with the same session.
   async onLeave(client: Client, code?: number): Promise<void> {
-    if (code === CloseCode.CONSENTED) return void this.gone(client.sessionId);
+    // A deliberate leave, or this pod shutting down (onBeforeShutdown): gone at once, no reconnection hold.
+    if (code === CloseCode.CONSENTED || code === CloseCode.SERVER_SHUTDOWN) return void this.gone(client.sessionId);
     try {
       await this.allowReconnection(client, RECONNECT_SECONDS);
     } catch {
       await this.gone(client.sessionId);
     }
+  }
+
+  // SIGTERM (a deploy or scale-down; Legion waits up to 10 min): Colyseus shuts the rooms down.
+  // Everyone's last-seen + play time is stored first, then they're disconnected for good (no
+  // reconnection hold); each client re-resolves through the matchmaker and lands on the new pod.
+  async onBeforeShutdown(): Promise<void> {
+    this.lock();
+    await Promise.all([...this.userIds.keys()].map((sid) => this.stampLeave(sid)));
+    this.userIds.clear(); // already stamped: the leaves that follow write nothing twice
+    this.disconnect(CloseCode.SERVER_SHUTDOWN);
   }
 
   private async gone(sessionId: string): Promise<void> {

@@ -12,7 +12,7 @@ env:
   # Repo variable, set under Settings -> Secrets and variables -> Actions -> Variables.
   # Must match the lowercase game ID created on the Bloxity "My Games" dashboard
   # (the client's GAME_SLUG in src/config.js: dont-miss-your-flight).
-  GAME_ID: ${{ vars.LEGION_GAME_ID || secrets.LEGION_GAME_ID }}
+  GAME_ID: ${{ vars.LEGION_GAME_ID || secrets.LEGION_GAME_ID || 'dont-miss-your-flight' }}
 
 jobs:
   test:
@@ -81,19 +81,14 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.GAME_ID }}-server:${{ steps.channel.outputs.channel }}-${{ github.sha }}
 
-      # roomSize = players per room (WorldRoom's maxClients, ROOM_MAX_CLIENTS in src/constants.ts);
-      # the Bloxity matchmaker picks the pod capacity itself, so no seatCap is sent.
+      # hosting.bloxity.io/docs: POST { channel, image, version }. No room size is sent: seatCap is
+      # optional and defaults to 50, which is WorldRoom's maxClients (ROOM_MAX_CLIENTS).
       - name: Deploy to Legion
         run: |
-          ROOM_SIZE=$(grep -oP 'ROOM_MAX_CLIENTS\s*=\s*\K\d+' src/constants.ts)
-          if [ -z "${ROOM_SIZE}" ]; then
-            echo "::error::Could not read ROOM_MAX_CLIENTS from src/constants.ts."
-            exit 1
-          fi
           curl -sSf -X POST "https://legion.bloxity.io/v1/apps/${GAME_ID}/deploy" \
             -H "Authorization: Bearer ${LEGION_DEPLOY_TOKEN}" \
             -H 'Content-Type: application/json' \
-            -d "{\"channel\":\"${CHANNEL}\",\"image\":\"${REGISTRY}/${OWNER}/${GAME_ID}-server:${CHANNEL}-${{ github.sha }}\",\"version\":\"${{ github.sha }}\",\"roomSize\":${ROOM_SIZE}}"
+            -d "{\"channel\":\"${CHANNEL}\",\"image\":\"${REGISTRY}/${OWNER}/${GAME_ID}-server:${CHANNEL}-${{ github.sha }}\",\"version\":\"${{ github.sha }}\"}"
         env:
           LEGION_DEPLOY_TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}
           CHANNEL: ${{ steps.channel.outputs.channel }}
