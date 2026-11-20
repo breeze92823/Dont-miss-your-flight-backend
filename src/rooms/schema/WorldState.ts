@@ -27,6 +27,9 @@ export const PlayerState = schema(
     vip: t.boolean().default(false),
     pack: t.boolean().default(true), // backpack worn
     bag: t.boolean().default(true), // suitcase in hand
+    // set by the server: their game stopped (no `alive` beat for AWAY_AFTER_MS, an `away` message, or a
+    // dropped connection waiting to reconnect). The others drop them from their lines + held spots.
+    away: t.boolean().default(false),
     // `emote` / `setAvatar`
     emote: t.string().default(""), // Bloxity emote id playing ("" = none)
     avatar: t.string().default(""), // Bloxity look JSON { equipped, proportions }, "" = default

@@ -1,7 +1,7 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { WorldState, PlayerState } from "./schema/WorldState.js";
 import {
-  AD_REWARD_COINS, AD_REWARD_COOLDOWN_MS, DEV_ID_PREFIX, GUEST_ID_PREFIX, ID_PATTERN, NAME_MAX, PFP_MAX_LEN,
+  AWAY_AFTER_MS, AWAY_CHECK_MS, AD_REWARD_COINS, AD_REWARD_COOLDOWN_MS, DEV_ID_PREFIX, GUEST_ID_PREFIX, ID_PATTERN, NAME_MAX, PFP_MAX_LEN,
   PLAY_SECONDS_MAX, RECONNECT_SECONDS, REPORT_EVERY_MS, ROOM_MAX_CLIENTS, TOKEN_MAX_LEN, TROLL_COOLDOWN_MS, TROLL_TEXT_MAX,
 } from "../constants.js";
 import { getPlayers, type PlayerDoc } from "../db.js";
@@ -60,6 +60,8 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   private trollAt = new Map<string, number>();
   private adAt = new Map<string, number>();
   private numbers = new Map<string, Numbers>();
+  // sessionId -> epoch ms of the last `alive` beat (only clients that send beats are timed out).
+  private beats = new Map<string, number>();
 
   messages = {
     // Debounced push of the client's whole progress. Upserts, so a first save creates the document.
@@ -145,6 +147,21 @@ export class WorldRoom extends Room<{ state: WorldState }> {
       const text = typeof msg?.text === "string" ? msg.text.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, TROLL_TEXT_MAX) : "";
       this.broadcast("trolled", { id, from: p.username || "Someone", text }, { except: client });
     },
+    // Heartbeat from the client's game loop: it is running (clears `away`).
+    alive: (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      this.beats.set(client.sessionId, Date.now());
+      if (p.away) p.away = false;
+    },
+    // { on }: the client's tab went hidden (true) / came back (false), sent at once.
+    away: (client: Client, msg: { on?: unknown }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || typeof msg?.on !== "boolean") return;
+      p.away = msg.on;
+      if (msg.on) this.beats.set(client.sessionId, 0);
+      else this.beats.set(client.sessionId, Date.now());
+    },
     // Presence (presence.ts): what the others draw.
     pose: (client: Client, msg: unknown) => {
       const p = this.state.players.get(client.sessionId);
@@ -173,6 +190,16 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   // Leaderboards + game stats for the room's signed-in players.
   onCreate() {
     this.clock.setInterval((): void => void this.report(), REPORT_EVERY_MS);
+    this.clock.setInterval((): void => this.checkAway(), AWAY_CHECK_MS);
+  }
+
+  // No beat for AWAY_AFTER_MS: their game stopped (hidden tab, frozen). Marked away for the others.
+  private checkAway() {
+    const now = Date.now();
+    for (const [sid, at] of this.beats) {
+      const p = this.state.players.get(sid);
+      if (p && !p.away && now - at > AWAY_AFTER_MS) p.away = true;
+    }
   }
 
   onJoin(client: Client, options?: IdentityMsg & { pose?: unknown; trip?: unknown; avatar?: string }) {
@@ -192,8 +219,13 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   async onLeave(client: Client, code?: number): Promise<void> {
     // A deliberate leave, or this pod shutting down (onBeforeShutdown): gone at once, no reconnection hold.
     if (code === CloseCode.CONSENTED || code === CloseCode.SERVER_SHUTDOWN) return void this.gone(client.sessionId);
+    // Away while the connection may still come back: nobody waits behind them in a line meanwhile.
+    const p = this.state.players.get(client.sessionId);
+    if (p) p.away = true;
+    this.beats.delete(client.sessionId);
     try {
       await this.allowReconnection(client, RECONNECT_SECONDS);
+      // Back: their next `alive` beat clears `away`.
     } catch {
       await this.gone(client.sessionId);
     }
@@ -240,6 +272,7 @@ export class WorldRoom extends Room<{ state: WorldState }> {
     this.trollAt.delete(sessionId);
     this.adAt.delete(sessionId);
     this.numbers.delete(sessionId);
+    this.beats.delete(sessionId);
   }
 
   // Stores a session's Daily Reward state. True when stored, or when there is nowhere to store it.
