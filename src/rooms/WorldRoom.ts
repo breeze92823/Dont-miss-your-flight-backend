@@ -204,14 +204,17 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   // reconnection hold); each client re-resolves through the matchmaker and lands on the new pod.
   async onBeforeShutdown(): Promise<void> {
     this.lock();
-    await Promise.all([...this.userIds.keys()].map((sid) => this.stampLeave(sid)));
+    await Promise.all([this.report(), ...[...this.userIds.keys()].map((sid) => this.stampLeave(sid))]);
     this.userIds.clear(); // already stamped: the leaves that follow write nothing twice
     this.disconnect(CloseCode.SERVER_SHUTDOWN);
   }
 
   private async gone(sessionId: string): Promise<void> {
+    // Their last scores go up now: the 30 s report would no longer find them.
+    const flush = this.report([sessionId]);
     await this.stampLeave(sessionId);
     this.forgetSession(sessionId);
+    await flush;
   }
 
   // Server-clock "last seen" + this session's play time for a player who has really gone.
@@ -280,6 +283,7 @@ export class WorldRoom extends Room<{ state: WorldState }> {
     if (userId === prev && this.identified.has(client.sessionId)) return; // same account: nothing to reload
     this.identified.add(client.sessionId);
     this.loaded.delete(client.sessionId); // no writes until the new identity's save is read
+    void this.report([client.sessionId]); // the old account's last scores, before its numbers go
     this.numbers.delete(client.sessionId);
     p.signedIn = !!userId && !userId.startsWith(DEV_ID_PREFIX);
     p.uid = userId && !userId.startsWith(DEV_ID_PREFIX) ? userId : "";
@@ -346,10 +350,13 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   private playtime(n: Numbers) {
     return Math.min(PLAY_SECONDS_MAX, n.playtime + Math.floor((Date.now() - n.since) / 1000));
   }
-  private async report() {
+  // Every REPORT_EVERY_MS for the whole room, or right away for `only` these sessions (leaving /
+  // switching account). Reads everything synchronously, so it can run just before they're forgotten.
+  private async report(only?: string[]) {
     const rows: PlayerNumbers[] = [];
     const changed: PlayerNumbers[] = [];
     for (const [sid, n] of this.numbers) {
+      if (only && !only.includes(sid)) continue;
       const userId = this.userIds.get(sid);
       if (!userId || userId.startsWith(DEV_ID_PREFIX)) continue;
       const row = { userId, flights: n.flights, destinations: n.destinations, coins: n.coins, playtime: this.playtime(n) };
