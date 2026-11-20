@@ -1,27 +1,35 @@
 import { schema, t, type SchemaType } from "@colyseus/schema";
 
-// The live roster: who is in the room. Durable progress lives in Mongo (src/db.ts).
-// To sync something new about a player, add a field here and accept it in a WorldRoom message.
+// The live roster: every passenger in the room, as the other clients draw them (client remote.js).
+// Durable progress lives in Mongo (src/db.ts). To sync something new about a player, add a field
+// here and accept it in a WorldRoom message (presence.ts bounds it).
 export const PlayerState = schema(
   {
-    username: t.string().default(""), // client-reported Bloxity displayName/username, not validated
-    signedIn: t.boolean().default(false), // has a Bloxity id: only signed-in players are saved
-    pfp: t.string().default(""), // Bloxity profile picture URL ("" = none), for the others' racer heads
-    racing: t.boolean().default(false), // in a race right now (`race` message)
-    distance: t.float64().default(0), // this race's distance so far, studs
-    // Presence (presence.ts, `pose` / `loadout` / `setAvatar`): what the others draw in the world.
-    x: t.float64().default(0), // feet position in track coordinates (z minus the race scroll)
-    y: t.float64().default(0),
-    z: t.float64().default(0),
-    yaw: t.float32().default(0), // heading, rad (PI = facing the gate)
-    speed: t.float32().default(0), // m/s, for flames and dead reckoning
-    boat: t.string().default(""), // equipped catalog ids (client config.js), "" = none / default
-    engine: t.string().default(""),
-    trail: t.string().default(""),
-    partner: t.string().default(""),
-    pets: t.string().default(""), // equipped pets "kind:tier,kind:tier"
-    world: t.string().default(""), // the world the player is in (client WORLDS id), "" = the start world
-    avatar: t.string().default(""), // Bloxity look JSON { equipped, proportions, skin }, "" = default
+    username: t.string().default(""), // Bloxity display name (verified for signed-in players)
+    signedIn: t.boolean().default(false), // verified Bloxity account: only these are saved
+    uid: t.string().default(""), // verified Bloxity user id ("" = guest): matches chat messages to a passenger
+    pfp: t.string().default(""), // Bloxity profile picture URL ("" = none)
+    // `pose`
+    x: t.float32().default(0), // feet position, m
+    y: t.float32().default(0),
+    z: t.float32().default(0),
+    yaw: t.float32().default(0), // facing, rad
+    speed: t.float32().default(0), // ground speed, m/s (walk cycle)
+    grounded: t.boolean().default(true),
+    anim: t.string().default(""), // pose overlay: "" | sit | tpose | ko
+    // `trip`
+    zone: t.string().default("airport"), // airport | cabin | city
+    dest: t.uint8().default(0), // DESTINATIONS index (cabin + city are per flight)
+    line: t.string().default(""), // shared line: "" | checkin | security | boarding
+    hold: t.string().default(""), // "desk:N" | "lane:N" | "mat:N" | "scan" | ""
+    suitcase: t.string().default("purple"), // SUITCASES id
+    hat: t.string().default(""), // job hat ("" = none)
+    vip: t.boolean().default(false),
+    pack: t.boolean().default(true), // backpack worn
+    bag: t.boolean().default(true), // suitcase in hand
+    // `emote` / `setAvatar`
+    emote: t.string().default(""), // Bloxity emote id playing ("" = none)
+    avatar: t.string().default(""), // Bloxity look JSON { equipped, proportions }, "" = default
   },
   "PlayerState",
 );

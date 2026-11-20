@@ -3,36 +3,49 @@ import type { ColyseusTestServer } from "@colyseus/testing";
 
 import type appConfig from "../src/app.config.js";
 import { WorldState } from "../src/rooms/schema/WorldState.js";
+import { __setVerifierForTest } from "../src/bloxity.js";
 import { sleep } from "./fakePlayers.js";
 import { testServer } from "./server.js";
 
-describe("roster", () => {
+describe("roster + identity", () => {
   let colyseus: ColyseusTestServer<typeof appConfig>;
   before(async () => (colyseus = await testServer()));
   beforeEach(async () => await colyseus.cleanup());
+  afterEach(() => __setVerifierForTest(null));
 
-  it("relays each player's profile picture and race distance, bounded", async () => {
+  it("relays each player's name and profile picture, bounded", async () => {
     const room = await colyseus.createRoom<WorldState>("world", {});
     const a = await colyseus.connectTo(room, { userId: "guest-a", username: "Ann", pfp: "https://static.bloxity.io/img/pfps/3.png" });
     const b = await colyseus.connectTo(room, { userId: "guest-b", username: "Bo", pfp: "javascript:alert(1)" });
     await sleep(50);
     const pa = room.state.players.get(a.sessionId)!;
     const pb = room.state.players.get(b.sessionId)!;
+    assert.strictEqual(pa.username, "Ann");
     assert.strictEqual(pa.pfp, "https://static.bloxity.io/img/pfps/3.png");
     assert.strictEqual(pb.pfp, "", "only http(s) pictures are relayed");
+    assert.strictEqual(pa.signedIn, false);
 
-    a.send("race", { racing: true, distance: 1234.5 });
-    b.send("race", { racing: true, distance: -5 });
-    await sleep(50);
-    assert.strictEqual(pa.racing, true);
-    assert.strictEqual(pa.distance, 1234.5);
-    assert.strictEqual(pb.distance, 0);
-
-    a.send("race", { racing: false, distance: 9999 });
     b.send("identify", { username: "Bo", pfp: "https://static.bloxity.io/img/pfps/7.png" });
     await sleep(50);
-    assert.strictEqual(pa.racing, false);
-    assert.strictEqual(pa.distance, 0, "a finished race reads 0");
     assert.strictEqual(pb.pfp, "https://static.bloxity.io/img/pfps/7.png");
+  });
+
+  it("trusts only the account a Bloxity token verifies to", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    __setVerifierForTest(async (token) => (await gate, token === "good" ? { id: "acc1", username: "Real Name", pfp: "" } : null));
+    const room = await colyseus.createRoom<WorldState>("world", {});
+    const good = await colyseus.connectTo(room, { token: "good", username: "Fake" });
+    const bad = await colyseus.connectTo(room, { token: "forged", userId: "acc1", username: "Mallory" });
+    let you: any = null;
+    good.onMessage("noProgress", (m: any) => (you = m.you));
+    bad.onMessage("noProgress", () => {});
+    release();
+    await sleep(100);
+    const pg = room.state.players.get(good.sessionId)!;
+    const pb = room.state.players.get(bad.sessionId)!;
+    assert.deepStrictEqual([pg.signedIn, pg.uid, pg.username], [true, "acc1", "Real Name"]);
+    assert.deepStrictEqual(you, { signedIn: true, username: "Real Name", uid: "acc1" });
+    assert.deepStrictEqual([pb.signedIn, pb.uid], [false, ""], "a bad token is a guest, whatever id it claims");
   });
 });

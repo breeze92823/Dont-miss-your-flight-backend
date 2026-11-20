@@ -1,8 +1,8 @@
 {
   "private": true,
-  "name": "bowling-roll-server",
+  "name": "dont-miss-your-flight-server",
   "version": "0.1.0",
-  "description": "Colyseus server for Bowling Roll: progress saving and the room roster",
+  "description": "Colyseus server for Don't Miss Your Flight: verified Bloxity identity, saves, fellow passengers",
   "type": "module",
   "main": "build/index.js",
   "engines": {
