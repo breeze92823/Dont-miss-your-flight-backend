@@ -19,7 +19,7 @@ export const PlayerState = schema(
     anim: t.string().default(""), // pose overlay: "" | sit | tpose | ko
     // `trip`
     zone: t.string().default("airport"), // airport | cabin | city
-    dest: t.uint8().default(0), // DESTINATIONS index (cabin + city are per flight)
+    dest: t.uint8().default(0), // DESTINATIONS index (the city is per destination; the cabin is shared)
     line: t.string().default(""), // shared line: "" | checkin | security | boarding
     hold: t.string().default(""), // "desk:N" | "lane:N" | "mat:N" | "scan" | ""
     suitcase: t.string().default("purple"), // SUITCASES id

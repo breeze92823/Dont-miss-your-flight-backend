@@ -26,7 +26,7 @@ export function applyPose(p: PlayerState, msg: unknown): void {
 }
 
 // `trip` { zone, dest, line, hold, suitcase, hat, vip, pack, bag }: where the passenger is in their
-// trip and what they carry. zone airport | cabin | city (cabin + city are per destination `dest`),
+// trip and what they carry. zone airport | cabin | city (the cabin is shared by every flight, the city is per destination `dest`),
 // line = the shared line they stand in, hold = the desk / lane / mat / scanner they use, suitcase
 // (SUITCASES id), hat (job id, "" = none), vip, pack (backpack worn), bag (suitcase in hand).
 export function applyTrip(p: PlayerState, msg: unknown): void {
