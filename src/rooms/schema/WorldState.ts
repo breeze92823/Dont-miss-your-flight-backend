@@ -20,7 +20,10 @@ export const PlayerState = schema(
     // `trip`
     zone: t.string().default("airport"), // airport | cabin | city
     dest: t.uint8().default(0), // DESTINATIONS index (the city is per destination; the cabin is shared)
-    line: t.string().default(""), // shared line: "" | checkin | security | boarding
+    // set by the server (lines.ts): the shared line they wait in ("" | checkin | security | boarding)
+    // and their ticket in it (lower = sooner; 0 = not in a line)
+    line: t.string().default(""),
+    ticket: t.float64().default(0),
     hold: t.string().default(""), // "desk:N" | "lane:N" | "mat:N" | "scan" | ""
     suitcase: t.string().default("purple"), // SUITCASES id
     hat: t.string().default(""), // job hat ("" = none)
@@ -30,6 +33,8 @@ export const PlayerState = schema(
     // set by the server: their game stopped (no `alive` beat for AWAY_AFTER_MS, an `away` message, or a
     // dropped connection waiting to reconnect). The others drop them from their lines + held spots.
     away: t.boolean().default(false),
+    // set by the server: no player input for IDLE_AFTER_MS. Passed over in lines; their held spot counts as free.
+    idle: t.boolean().default(false),
     // `emote` / `setAvatar`
     emote: t.string().default(""), // Bloxity emote id playing ("" = none)
     avatar: t.string().default(""), // Bloxity look JSON { equipped, proportions }, "" = default

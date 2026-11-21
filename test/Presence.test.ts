@@ -24,7 +24,7 @@ describe("presence (fellow passengers)", () => {
     const p = room.state.players.get(a.sessionId)!;
     assert.deepStrictEqual([p.x, p.y, p.z, p.speed, p.grounded, p.anim], [3, 0.5, -12, 4, false, "sit"]);
     assert.ok(Math.abs(Math.abs(p.yaw) - Math.PI) < 1e-5);
-    assert.deepStrictEqual([p.zone, p.dest, p.line, p.hold, p.suitcase, p.hat, p.vip, p.pack, p.bag], ["cabin", 3, "security", "lane:1", "gold", "pilot", true, false, false]);
+    assert.deepStrictEqual([p.zone, p.dest, p.line, p.hold, p.suitcase, p.hat, p.vip, p.pack, p.bag], ["cabin", 3, "", "lane:1", "gold", "pilot", true, false, false], "line is server-owned (joinLine)");
     assert.strictEqual(p.avatar, '{"equipped":{}}');
   });
 
