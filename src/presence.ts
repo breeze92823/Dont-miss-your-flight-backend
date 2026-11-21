@@ -1,4 +1,4 @@
-import { ANIMS, AVATAR_MAX_LEN, DEST_MAX, EMOTE_PATTERN, HOLD_PATTERN, ID_PATTERN, LINES, POSE_BOUNDS, ZONES } from "./constants.js";
+import { ANIMS, AVATAR_MAX_LEN, DEST_MAX, EMOTE_PATTERN, HOLD_PATTERN, ID_PATTERN, POSE_BOUNDS, ZONES } from "./constants.js";
 import type { PlayerState } from "./rooms/schema/WorldState.js";
 
 // Presence: what the other clients need to draw a player as a fellow passenger (client remote.js).
@@ -27,14 +27,14 @@ export function applyPose(p: PlayerState, msg: unknown): void {
 
 // `trip` { zone, dest, line, hold, suitcase, hat, vip, pack, bag }: where the passenger is in their
 // trip and what they carry. zone airport | cabin | city (the cabin is shared by every flight, the city is per destination `dest`),
-// line = the shared line they stand in, hold = the desk / lane / mat / scanner they use, suitcase
+// line (ignored: the server sets it, lines.ts), hold = the desk / lane / mat / scanner they use, suitcase
 // (SUITCASES id), hat (job id, "" = none), vip, pack (backpack worn), bag (suitcase in hand).
 export function applyTrip(p: PlayerState, msg: unknown): void {
   if (!msg || typeof msg !== "object") return;
   const m = msg as Record<string, unknown>;
   if (oneOf(ZONES, m.zone)) p.zone = m.zone;
   if (Number.isInteger(m.dest)) p.dest = clamp(m.dest as number, 0, DEST_MAX - 1);
-  if (oneOf(LINES, m.line)) p.line = m.line;
+  // `line` is server-owned (joinLine / leaveLine, lines.ts): a trip's `line` is ignored.
   if (m.hold === "" || (typeof m.hold === "string" && HOLD_PATTERN.test(m.hold))) p.hold = m.hold as string;
   if (isId(m.suitcase)) p.suitcase = m.suitcase;
   if (m.hat === "" || isId(m.hat)) p.hat = m.hat as string;

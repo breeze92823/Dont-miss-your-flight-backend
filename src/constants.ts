@@ -21,6 +21,25 @@ export const POSE_BOUNDS = { xz: 5000, yDown: 200, yUp: 1000, speed: 60 };
 export const ZONES = ["airport", "cabin", "city"] as const;
 // The shared lines a player can stand in (client queue.js / security.js / boarding.js).
 export const LINES = ["", "checkin", "security", "boarding"] as const;
+export const LINE_KINDS = ["checkin", "security", "boarding"] as const;
+// Lines are server-ordered (lines.ts): `joinLine` hands out a ticket (join order), `skipLine` moves
+// it to the front, `callMe` { kind, keys } sends one of the first CALL_DEPTH waiting passengers to
+// a free spot of that line (the spots the client offers, one each), `claimSpot` { keys } hands out
+// a spot outside a line (security search mats). Away / idle passengers keep their ticket but are
+// passed over, and the spots they hold count as free.
+export const CALL_DEPTH = 3;
+export const LINE_SPOTS: Record<(typeof LINE_KINDS)[number], RegExp> = {
+  checkin: /^desk:\d{1,2}$/,
+  security: /^lane:\d{1,2}$/,
+  boarding: /^scan$/,
+};
+// Most spot keys one call may offer.
+export const SPOT_KEYS_MAX = 16;
+// A spot just handed out stays that player's this long even before their `trip` reports it.
+export const SPOT_GRACE_MS = 4000;
+// No `active` message (the player touched the keyboard / mouse / screen) for this long = idle: passed
+// over in lines and their held spot counts as free. Only clients that have sent `active` once time out.
+export const IDLE_AFTER_MS = 60_000;
 // Animation overlays the others play on a passenger (client remote.js).
 export const ANIMS = ["", "sit", "tpose", "ko"] as const;
 // A spot a passenger holds so no one else is sent to it: "desk:2", "lane:0", "mat:3", "scan".

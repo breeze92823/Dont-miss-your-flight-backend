@@ -1,9 +1,10 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { WorldState, PlayerState } from "./schema/WorldState.js";
 import {
-  AWAY_AFTER_MS, AWAY_CHECK_MS, AD_REWARD_COINS, AD_REWARD_COOLDOWN_MS, DEV_ID_PREFIX, GUEST_ID_PREFIX, ID_PATTERN, NAME_MAX, PFP_MAX_LEN,
+  AWAY_AFTER_MS, AWAY_CHECK_MS, AD_REWARD_COINS, AD_REWARD_COOLDOWN_MS, DEV_ID_PREFIX, GUEST_ID_PREFIX, ID_PATTERN, IDLE_AFTER_MS, NAME_MAX, PFP_MAX_LEN,
   PLAY_SECONDS_MAX, RECONNECT_SECONDS, REPORT_EVERY_MS, ROOM_MAX_CLIENTS, TOKEN_MAX_LEN, TROLL_COOLDOWN_MS, TROLL_TEXT_MAX,
 } from "../constants.js";
+import { Lines } from "../lines.js";
 import { getPlayers, type PlayerDoc } from "../db.js";
 import { progressView, sanitizeProgress } from "../sanitize.js";
 import { claimDaily, dailyFields, dailyView, readDaily, rollDaily, type DailyState } from "../daily.js";
@@ -62,6 +63,10 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   private numbers = new Map<string, Numbers>();
   // sessionId -> epoch ms of the last `alive` beat (only clients that send beats are timed out).
   private beats = new Map<string, number>();
+  // sessionId -> epoch ms of the last `active` (player input); only clients that sent one go idle.
+  private lastInput = new Map<string, number>();
+  // The shared lines and the spots at their ends (lines.ts).
+  lines = new Lines(this.state.players);
 
   messages = {
     // Debounced push of the client's whole progress. Upserts, so a first save creates the document.
@@ -162,6 +167,24 @@ export class WorldRoom extends Room<{ state: WorldState }> {
       if (msg.on) this.beats.set(client.sessionId, 0);
       else this.beats.set(client.sessionId, Date.now());
     },
+    // The player touched the keyboard / mouse / screen (sent every few s while they do): clears `idle`.
+    active: (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      this.lastInput.set(client.sessionId, Date.now());
+      if (p.idle) p.idle = false;
+    },
+    // Lines (lines.ts): { kind } joins at the back / moves to the front; leaveLine steps out.
+    joinLine: (client: Client, msg: { kind?: unknown }) => this.lines.join(client.sessionId, msg?.kind),
+    leaveLine: (client: Client) => this.lines.leave(client.sessionId),
+    skipLine: (client: Client, msg: { kind?: unknown }) => this.lines.skip(client.sessionId, msg?.kind),
+    // { kind, keys }: is it this passenger's turn, and which offered spot? Answers `called` { kind, key } ("" = not yet).
+    callMe: (client: Client, msg: { kind?: unknown; keys?: unknown }) => {
+      const key = this.lines.call(client.sessionId, msg?.kind, msg?.keys);
+      client.send("called", { kind: typeof msg?.kind === "string" ? msg.kind : "", key });
+    },
+    // { keys }: a free spot outside a line (search mats). Answers `spot` { key } ("" = none free).
+    claimSpot: (client: Client, msg: { keys?: unknown }) => client.send("spot", { key: this.lines.claim(client.sessionId, msg?.keys) }),
     // Presence (presence.ts): what the others draw.
     pose: (client: Client, msg: unknown) => {
       const p = this.state.players.get(client.sessionId);
@@ -199,6 +222,11 @@ export class WorldRoom extends Room<{ state: WorldState }> {
     for (const [sid, at] of this.beats) {
       const p = this.state.players.get(sid);
       if (p && !p.away && now - at > AWAY_AFTER_MS) p.away = true;
+    }
+    // No input for IDLE_AFTER_MS: idle (passed over in lines, their spot counts as free).
+    for (const [sid, at] of this.lastInput) {
+      const p = this.state.players.get(sid);
+      if (p && !p.idle && now - at > IDLE_AFTER_MS) p.idle = true;
     }
   }
 
@@ -273,6 +301,8 @@ export class WorldRoom extends Room<{ state: WorldState }> {
     this.adAt.delete(sessionId);
     this.numbers.delete(sessionId);
     this.beats.delete(sessionId);
+    this.lastInput.delete(sessionId);
+    this.lines.forget(sessionId);
   }
 
   // Stores a session's Daily Reward state. True when stored, or when there is nowhere to store it.
