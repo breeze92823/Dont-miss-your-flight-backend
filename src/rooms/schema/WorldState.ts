@@ -30,6 +30,8 @@ export const PlayerState = schema(
     vip: t.boolean().default(false),
     pack: t.boolean().default(true), // backpack worn
     bag: t.boolean().default(true), // suitcase in hand
+    cls: t.int8().default(-1), // on board: their ticket's class (0 First .. 3 Economy), -1 = not flying
+    crew: t.boolean().default(false), // on a flight-attendant shift (serves others, escorts stowaways)
     // set by the server: their game stopped (no `alive` beat for AWAY_AFTER_MS, an `away` message, or a
     // dropped connection waiting to reconnect). The others drop them from their lines + held spots.
     away: t.boolean().default(false),

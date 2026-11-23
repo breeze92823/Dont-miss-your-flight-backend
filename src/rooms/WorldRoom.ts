@@ -3,6 +3,7 @@ import { WorldState, PlayerState } from "./schema/WorldState.js";
 import {
   AWAY_AFTER_MS, AWAY_CHECK_MS, AD_REWARD_COINS, AD_REWARD_COOLDOWN_MS, DEV_ID_PREFIX, GUEST_ID_PREFIX, ID_PATTERN, IDLE_AFTER_MS, NAME_MAX, PFP_MAX_LEN,
   PLAY_SECONDS_MAX, RECONNECT_SECONDS, REPORT_EVERY_MS, ROOM_MAX_CLIENTS, TOKEN_MAX_LEN, TROLL_COOLDOWN_MS, TROLL_TEXT_MAX,
+  CABIN_COOLDOWN_MS, CABIN_KINDS, REPORT_COOLDOWN_MS,
 } from "../constants.js";
 import { Lines } from "../lines.js";
 import { getPlayers, type PlayerDoc } from "../db.js";
@@ -59,6 +60,9 @@ export class WorldRoom extends Room<{ state: WorldState }> {
   private loaded = new Set<string>();
   private dailies = new Map<string, DailyState>();
   private trollAt = new Map<string, number>();
+  private cabinAt = new Map<string, number>();
+  // "from>to" -> epoch ms of the last report (one report per pair per REPORT_COOLDOWN_MS)
+  private reportAt = new Map<string, number>();
   private adAt = new Map<string, number>();
   private numbers = new Map<string, Numbers>();
   // sessionId -> epoch ms of the last `alive` beat (only clients that send beats are timed out).
@@ -151,6 +155,33 @@ export class WorldRoom extends Room<{ state: WorldState }> {
       this.trollAt.set(client.sessionId, now);
       const text = typeof msg?.text === "string" ? msg.text.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, TROLL_TEXT_MAX) : "";
       this.broadcast("trolled", { id, from: p.username || "Someone", text }, { except: client });
+    },
+    // On board, passenger to passenger: `cabin` { to, kind, item } is passed to that one session as
+    // `cabin` { from, name, kind, item }. kind: report (a stowaway: the target's own client checks it and
+    // has the crew escort them), reportOk (the target confirms: the reporter gets their reward), serve (a
+    // flight attendant on shift hands them a snack `item`), tip (thanks for it). Both must be in the cabin;
+    // only crew serve, crew are never reported; rate-limited per sender and per report pair.
+    cabin: (client: Client, msg: { to?: unknown; kind?: unknown; item?: unknown }) => {
+      const from = this.state.players.get(client.sessionId);
+      const to = typeof msg?.to === "string" ? msg.to : "";
+      const target = to && to !== client.sessionId ? this.state.players.get(to) : undefined;
+      const kind = msg?.kind;
+      if (!from || !target || typeof kind !== "string" || !(CABIN_KINDS as readonly string[]).includes(kind)) return;
+      if (from.zone !== "cabin" || target.zone !== "cabin") return;
+      if (kind === "serve" && !from.crew) return;
+      if (kind === "report" && target.crew) return;
+      const item = msg?.item === undefined || msg.item === "" ? "" : typeof msg.item === "string" && ID_PATTERN.test(msg.item) ? msg.item : null;
+      if (item === null) return;
+      const now = Date.now();
+      if (now - (this.cabinAt.get(client.sessionId) ?? 0) < CABIN_COOLDOWN_MS) return;
+      if (kind === "report") {
+        const pair = `${client.sessionId}>${to}`;
+        if (now - (this.reportAt.get(pair) ?? 0) < REPORT_COOLDOWN_MS) return;
+        this.reportAt.set(pair, now);
+      }
+      this.cabinAt.set(client.sessionId, now);
+      const dest = this.clients.find((c) => c.sessionId === to);
+      dest?.send("cabin", { from: client.sessionId, name: from.username || "Someone", kind, item });
     },
     // Heartbeat from the client's game loop: it is running (clears `away`).
     alive: (client: Client) => {
@@ -298,6 +329,8 @@ export class WorldRoom extends Room<{ state: WorldState }> {
     this.loaded.delete(sessionId);
     this.dailies.delete(sessionId);
     this.trollAt.delete(sessionId);
+    this.cabinAt.delete(sessionId);
+    for (const k of this.reportAt.keys()) if (k.startsWith(`${sessionId}>`) || k.endsWith(`>${sessionId}`)) this.reportAt.delete(k);
     this.adAt.delete(sessionId);
     this.numbers.delete(sessionId);
     this.beats.delete(sessionId);

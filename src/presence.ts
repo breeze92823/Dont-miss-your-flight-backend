@@ -1,4 +1,4 @@
-import { ANIMS, AVATAR_MAX_LEN, DEST_MAX, EMOTE_PATTERN, HOLD_PATTERN, ID_PATTERN, POSE_BOUNDS, ZONES } from "./constants.js";
+import { ANIMS, AVATAR_MAX_LEN, CLASS_MAX, DEST_MAX, EMOTE_PATTERN, HOLD_PATTERN, ID_PATTERN, POSE_BOUNDS, ZONES } from "./constants.js";
 import type { PlayerState } from "./rooms/schema/WorldState.js";
 
 // Presence: what the other clients need to draw a player as a fellow passenger (client remote.js).
@@ -28,7 +28,9 @@ export function applyPose(p: PlayerState, msg: unknown): void {
 // `trip` { zone, dest, line, hold, suitcase, hat, vip, pack, bag }: where the passenger is in their
 // trip and what they carry. zone airport | cabin | city (the cabin is shared by every flight, the city is per destination `dest`),
 // line (ignored: the server sets it, lines.ts), hold = the desk / lane / mat / scanner they use, suitcase
-// (SUITCASES id), hat (job id, "" = none), vip, pack (backpack worn), bag (suitcase in hand).
+// (SUITCASES id), hat (job id, "" = none), vip, pack (backpack worn), bag (suitcase in hand), cls (on board:
+// the ticket's class 0..3, -1 = not flying; others report them as stowaways forward of it), crew (on a
+// flight-attendant shift).
 export function applyTrip(p: PlayerState, msg: unknown): void {
   if (!msg || typeof msg !== "object") return;
   const m = msg as Record<string, unknown>;
@@ -41,6 +43,8 @@ export function applyTrip(p: PlayerState, msg: unknown): void {
   if (typeof m.vip === "boolean") p.vip = m.vip;
   if (typeof m.pack === "boolean") p.pack = m.pack;
   if (typeof m.bag === "boolean") p.bag = m.bag;
+  if (Number.isInteger(m.cls) && (m.cls as number) >= -1 && (m.cls as number) <= CLASS_MAX) p.cls = m.cls as number;
+  if (typeof m.crew === "boolean") p.crew = m.crew;
 }
 
 // `emote` { id }: a Bloxity emote the passenger plays ("" = stopped).
