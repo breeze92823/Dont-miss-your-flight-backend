@@ -74,6 +74,12 @@ export const PLAY_SECONDS_MAX = 31_536_000; // ~1 year
 // TROLL_COOLDOWN_MS; an announcement's text is cut to TROLL_TEXT_MAX characters.
 export const TROLL_COOLDOWN_MS = 1500;
 export const TROLL_TEXT_MAX = 80;
+// On board (`cabin` -> `cabin`, WorldRoom): one passenger-to-passenger message per sender every
+// CABIN_COOLDOWN_MS; reporting the same passenger again waits REPORT_COOLDOWN_MS.
+export const CABIN_KINDS = ["report", "reportOk", "serve", "tip"] as const;
+export const CABIN_COOLDOWN_MS = 400;
+export const REPORT_COOLDOWN_MS = 15_000;
+export const CLASS_MAX = 3; // cabin classes 0 (First) .. 3 (Economy)
 // Emotes (Bloxity catalogue ids, 24 hex chars) relayed to the others.
 export const EMOTE_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 
